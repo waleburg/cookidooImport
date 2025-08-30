@@ -5,20 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Meine Cookidoo Rezepte</title>
   <style>
+    :root { --accent:#e74c3c; }
     body { font-family: system-ui, sans-serif; background: #fafafa; margin: 0; color: #333; }
     header { background: linear-gradient(135deg, #ff6b6b, #f7d794); padding: 2rem; text-align: center; color: #fff; }
     header h1 { margin: 0; font-size: 2.2rem; }
     header p { margin: .3rem 0 0; }
-    main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+    main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+    .toolbar { display:flex; gap:.8rem; align-items:center; margin: 0 0 1.2rem 0; flex-wrap: wrap;}
+    .search { flex:1; min-width: 240px; }
+    .search input { width: 100%; padding:.75rem 1rem; border:1px solid #ddd; border-radius: 12px; font-size:1rem; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.5rem; }
     .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,.08); overflow: hidden; text-decoration: none; color: inherit; transition: transform .2s ease, box-shadow .2s ease; }
     .card:hover { transform: translateY(-4px); box-shadow: 0 8px 18px rgba(0,0,0,.12); }
     .card img { width: 100%; height: 160px; object-fit: cover; display: block; }
     .card .content { padding: 1rem; }
-    .card h2 { margin: 0 0 .4rem 0; font-size: 1.1rem; color: #e74c3c; }
+    .card h2 { margin: 0 0 .4rem 0; font-size: 1.1rem; color: var(--accent); }
     .muted { color: #666; font-size: .9rem; }
     .error { background: #fff0f0; border: 1px solid #ffd0d0; padding: 1rem; border-radius: 8px; margin-top: 1rem; color: #a33; }
+    .howto { background:#fff; border:1px solid #eee; border-radius:12px; padding:1.2rem; margin:2rem 0; box-shadow: 0 2px 6px rgba(0,0,0,.04); }
+    .howto h3 { margin:0 0 .6rem 0; color:#222; }
+    .howto ol { margin:.2rem 0 0 1.2rem; }
+    .howto code { background:#f5f5f5; padding:.1rem .35rem; border-radius:6px; }
     footer { text-align: center; padding: 1.5rem; font-size: .85rem; color: #777; }
+    .hidden { display:none !important; }
   </style>
 </head>
 <body>
@@ -26,11 +35,30 @@
   <h1>🍲 Meine Cookidoo-Import Rezepte</h1>
   <p>Neue Rezepte einfach als Unterordner in <code>/recipes/</code> mit <code>index.html</code> hinzufügen.</p>
 </header>
+
 <main>
+  <section class="howto" aria-labelledby="howto-title">
+    <h3 id="howto-title">So fügst du ein neues Rezept hinzu</h3>
+    <ol>
+      <li>Erstelle einen Ordner unter <code>/recipes/&lt;dein-rezept-name&gt;/</code>.</li>
+      <li>Lege darin eine Datei <code>index.html</code> mit deinem Rezept an (Titel, Zutaten zeilenweise, nummerierte Schritte). Optional: <code>cover.jpg</code> für das Kartenbild.</li>
+      <li>Commit &amp; push – die Übersicht unten aktualisiert sich automatisch.</li>
+      <li>Zum Import in Cookidoo die URL des Unterordners verwenden, z.&nbsp;B. <code>https://waleburg.github.io/cookidooImport/recipes/nam-prik-pao/</code>.</li>
+    </ol>
+  </section>
+
+  <div class="toolbar">
+    <div class="search">
+      <input id="search" type="search" placeholder="Rezepte suchen … (z. B. Chili, Suppe, Dessert)" aria-label="Rezepte durchsuchen">
+    </div>
+    <div class="muted" id="count"></div>
+  </div>
+
   <div id="grid" class="grid" aria-live="polite"></div>
   <div id="msg" class="muted"></div>
   <div id="err" class="error" style="display:none"></div>
 </main>
+
 <footer>© 2025 – Private Rezeptsammlung für Cookidoo-Import</footer>
 
 <script>
@@ -38,13 +66,25 @@
   const grid = document.getElementById('grid');
   const msg  = document.getElementById('msg');
   const err  = document.getElementById('err');
+  const search = document.getElementById('search');
+  const count  = document.getElementById('count');
 
   const parts = location.pathname.split('/').filter(Boolean);
-  const repo = parts.length ? parts[0] : "cookidooImport"; // default fallback
+  const repo = parts.length ? parts[0] : "cookidooImport"; // fallback
   const owner = "waleburg"; // set your GitHub username here
 
   const baseUrl = `${location.origin}/${repo}`;
   const apiUrl  = `https://api.github.com/repos/${owner}/${repo}/contents/recipes`;
+
+  function humanize(name) {
+    return name.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  function updateCount() {
+    const visible = grid.querySelectorAll('.card:not(.hidden)').length;
+    const total = grid.querySelectorAll('.card').length;
+    count.textContent = total ? `${visible} von ${total} Rezepten` : '';
+  }
 
   try {
     const res = await fetch(apiUrl, { headers: { 'Accept': 'application/vnd.github+json' } });
@@ -58,12 +98,13 @@
 
     for (const d of dirs) {
       const name = d.name;
-      const title = name.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const title = humanize(name);
       const link  = `${baseUrl}/recipes/${name}/`;
 
       const a = document.createElement('a');
       a.href = link;
       a.className = 'card';
+      a.dataset.title = title.toLowerCase();
 
       const img = document.createElement('img');
       img.alt = title;
@@ -85,10 +126,30 @@
       grid.appendChild(a);
     }
 
+    // Simple client-side search/filter
+    search.addEventListener('input', function() {
+      const q = this.value.trim().toLowerCase();
+      const cards = grid.querySelectorAll('.card');
+      let visible = 0;
+      cards.forEach(card => {
+        const match = !q || card.dataset.title.includes(q);
+        card.classList.toggle('hidden', !match);
+        if (match) visible++;
+      });
+      if (cards.length) {
+        msg.textContent = visible ? "" : "Keine Treffer – ändere den Suchbegriff.";
+      }
+      updateCount();
+    });
+
+    updateCount();
+
+    // Helper card when empty
     if (!dirs.length) {
       const a = document.createElement('a');
       a.href = `${baseUrl}/recipes/beispiel/`;
       a.className = 'card';
+      a.dataset.title = 'beispiel';
       const img = document.createElement('img');
       img.alt = "Beispiel";
       img.src = `${baseUrl}/assets/placeholder.png`;
@@ -102,6 +163,7 @@
       content.appendChild(h2); content.appendChild(p);
       a.appendChild(img); a.appendChild(content);
       grid.appendChild(a);
+      updateCount();
     }
 
   } catch (e) {
